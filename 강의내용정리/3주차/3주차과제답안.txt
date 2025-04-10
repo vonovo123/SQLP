@@ -1,0 +1,51 @@
+
+PK_T_MANUF53 : M_CODE
+IDX_T_PRODUCT53 : M_CODE + PROD_ID
+IDX_T_ORDER53 : ORDER_DT + PROD_ID
+
+SELECT /*+ INDEX(C PK_T_MANUF53)*/
+C.M_CODE, C.M_NM
+FROM T_MANUF53 C
+WHERE EXISTS (
+  SELECT 1 
+    FROM T_PRODUCT53 B
+    WHERE M_CODE = C.M_CODE
+    AND EXISTS (
+      SELECT 1 
+      FROM T_ORDER53
+      WHERE PROD_ID = B.PROD_ID
+      AND ORDER_DT >= '20090101'
+    )
+);
+
+
+PLAN_TABLE_OUTPUT
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+SQL_ID	77nhgd8ms1wj8, child number 0
+-------------------------------------
+SELECT /*+ INDEX(C PK_T_MANUF53)*/ C.M_CODE, C.M_NM FROM T_MANUF53 C
+WHERE EXISTS (	 SELECT 1     FROM T_PRODUCT53 B     WHERE M_CODE =
+C.M_CODE     AND EXISTS (	SELECT 1       FROM T_ORDER53
+WHERE PROD_ID = B.PROD_ID	AND ORDER_DT >= '20090101'     ) )
+
+Plan hash value: 1355271652
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Id  | Operation			     | Name	       | Starts | E-Rows | A-Rows |   A-Time   | Buffers |  OMem |  1Mem | Used-Mem |
+---------------------------------------------------------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT		     |		       |      1 |	 |     48 |00:00:08.69 |     767 |	 |	 |	    |
+|*  1 |  HASH JOIN SEMI 		     |		       |      1 |     50 |     48 |00:00:08.69 |     767 |  1025K|  1025K| 1342K (0)|
+|   2 |   TABLE ACCESS BY INDEX ROWID BATCHED| T_MANUF53       |      1 |     50 |     50 |00:00:00.01 |       2 |	 |	 |	    |
+|   3 |    INDEX FULL SCAN		     | PK_T_MANUF53    |      1 |     50 |     50 |00:00:00.01 |       1 |	 |	 |	    |
+|   4 |   VIEW				     | VW_SQ_1	       |      1 |  10000 |    200 |00:00:08.68 |     765 |	 |	 |	    |
+|*  5 |    HASH JOIN SEMI		     |		       |      1 |  10000 |    200 |00:00:08.68 |     765 |  2011K|  2011K| 1871K (0)|
+|   6 |     INDEX FAST FULL SCAN	     | IDX_T_PRODUCT53 |      1 |  10000 |  10000 |00:00:00.10 |      34 |	 |	 |	    |
+|*  7 |     INDEX RANGE SCAN		     | IDX_T_ORDER53   |      1 |    200K|    200K|00:00:02.03 |     731 |	 |	 |	    |
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   1 - access("ITEM_1"="C"."M_CODE")
+   5 - access("PROD_ID"="B"."PROD_ID")
+   7 - access("ORDER_DT">='20090101' AND "ORDER_DT" IS NOT NULL)

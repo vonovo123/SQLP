@@ -1,0 +1,90 @@
+ALTER SESSION SET WORKAREA_SIZE_POLICY=MANUAL;
+ALTER SESSION SET SORT_AREA_SIZE = 2000000000;
+
+DROP   TABLE T_cust23;
+CREATE TABLE T_cust23
+  (고객번호      VARCHAR2(7),
+   고객명        VARCHAR2(50),
+   고객성향코드  VARCHAR2(3),
+   C1            VARCHAR2(30),
+   C2            VARCHAR2(30),
+   C3            VARCHAR2(30),
+   C4            VARCHAR2(30),
+   C5            VARCHAR2(30),
+   CONSTRAINT PK_T_고객23 PRIMARY KEY (고객번호)
+  );
+
+CREATE OR REPLACE PUBLIC SYNONYM T_cust23 FOR T_cust23;
+
+INSERT /*+ APPEND */ INTO T_cust23
+SELECT LPAD(TO_CHAR(ROWNUM), 7, '0')                                    고객번호
+     , RPAD(TO_CHAR(ROUND(DBMS_RANDOM.VALUE(1, 65000))), 10, '0')       고객명
+     , LPAD(TO_CHAR(ROUND(DBMS_RANDOM.VALUE(1, 200))) || '0', 3, '0')   고객성향코드
+     , 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'                                     C1
+     , 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'                                     C2
+     , 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'                                     C3
+     , 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'                                     C4
+     , 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'                                     C5
+FROM DUAL
+CONNECT BY LEVEL <= 20000
+ORDER BY DBMS_RANDOM.RANDOM();
+
+COMMIT;
+
+DROP   TABLE T_date23;
+CREATE TABLE T_date23 AS
+SELECT TO_CHAR(TO_DATE('20170101', 'YYYYMMDD') + LEVEL, 'YYYYMMDD') WORK_DATE
+FROM DUAL
+CONNECT BY LEVEL <= 100
+ORDER BY DBMS_RANDOM.RANDOM();
+
+CREATE OR REPLACE PUBLIC SYNONYM T_date23 FOR T_date23;
+
+DROP TABLE  T_order23 ;
+
+CREATE TABLE T_order23 AS
+SELECT  'O' || LPAD(TO_CHAR(ROWNUM), 7, '0')                                    ordernum
+      ,  C.고객번호                                                                custno
+      , 'P' || LPAD(TO_CHAR(ROUND(DBMS_RANDOM.VALUE(1, 200))) || '0', 3, '0')   itemcode
+      ,  D.WORK_DATE                                                            orderdate
+      , ROUND(DBMS_RANDOM.VALUE(1, 3))                                          orderamount       
+FROM T_cust23 C, T_date23 D
+ORDER BY DBMS_RANDOM.RANDOM();
+
+
+CREATE OR REPLACE PUBLIC SYNONYM T_order23 FOR T_order23;
+
+ALTER TABLE T_order23 
+ADD CONSTRAINT PK_T_order23 PRIMARY KEY(ordernum)
+;
+
+EXECUTE DBMS_STATS.GATHER_TABLE_STATS('KWON', 'T_cust23');
+
+EXECUTE DBMS_STATS.GATHER_TABLE_STATS('KWON', 'T_order23');
+
+ALTER SESSION SET WORKAREA_SIZE_POLICY=AUTO;
+
+drop public synonym T_고객23 force;
+drop public synonym T_DATE23 force;
+drop public synonym T_주문23 force;
+
+drop synonym T_고객23 force;
+drop synonym T_DATE23 force;
+drop synonym T_주문23 force;
+
+
+/*
+PLAN_TABLE_OUTPUT
+--------------------------------------------------------------
+| Id  | Operation          | Name   |A-Rows | Buffers | Reads 
+--------------------------------------------------------------
+|   0 | SELECT STATEMENT   |        |    18 |   11363 |  10793 
+|*  1 |  HASH JOIN         |        |    18 |   11363 |  10793 
+|*  2 |   TABLE ACCESS FULL| T_고객2|   108 |     461 |      0
+|*  3 |   TABLE ACCESS FULL| T_주문2|  3070 |   10902 |  10793 
+--------------------------------------------------------------
+ */
+
+ SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY_CURSOR(NULL,NULL,'ALLSTATS LAST'));
+
+ 

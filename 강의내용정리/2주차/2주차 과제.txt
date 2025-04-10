@@ -1,0 +1,89 @@
+/* 아래 SQL을 OLTP에 최적화 하여 튜닝 하세요.  (인덱스 및 SQL 수정 가능)
+   최종 결과 값 : 18건
+   
+   T_고객23 
+      - 총건수               : 2만건
+      - 고객성향코드 = '920' : 101건
+      - 고객성향코드 종류    : 200종류      
+      - 인덱스 : PK_T_고객23 (고객번호)
+
+   T_주문23
+      - 총 건수: 200만건
+      - 아래 조건의 결과 : 10,000건
+        O.주문일자 LIKE '201701%' AND O.상품코드 = 'P103'   
+      - 인덱스 : PK_T_주문23 (주문번호)   */
+
+SELECT C.고객번호, C.고객명, C.C1, 
+       O.ordernum, O.itemcode, O.orderdate, O.orderamount
+FROM T_cust23 C, T_order23 O
+WHERE C.고객성향코드 = '920'
+ AND  O.custno     = C.고객번호+ SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY_CURSOR(NULL,NULL,'ALLSTATS LAST'));
+ AND  O.orderdate     LIKE '201701%'
+ AND  O.itemcode     = 'P103';
+ORDER BY desc t_cust23;
+
+-- 풀이과정
+
+1. inner table에 조인연결컬럼 조건절에 맞는 인덱스 IDX_T_order23 (고객번호, 상품코드, 주문일자) 를 생성한다.
+
+CREATE INDEX IDX_T_order23 ON T_order23(고객번호, 상품코드, 주문일자);
+
+2. outer table의 인덱스에 조건절에 맞는 인덱스 IDX_T_cust23(고객성향코드)을 추가한다.
+
+CREATE INDEX IDX_T_cust23 ON T_cust23(고객성향코드);
+
+3. inner table의 인덱스 스캔 범위를 개선하기 위해 조건절을 수정한다.
+
+WHERE C.고객성향코드 = '920'
+ AND  O.고객번호     = C.고객번호
+ AND  O.주문일자 BETWEEN '20170101' AND '20170131'
+ AND  O.상품코드     = 'P103';
+ORDER BY desc t_cust23;
+
+4. inner 테이블이 크기 때문에 nl 조인을 이용한다
+
+SELECT /*+ leading(C O) USE_NL(C O) index(C IDX_T_cust23) index(O IDX_T_order23) */
+       C.고객번호, C.고객명, C.C1, 
+       O.주문번호, O.상품코드, O.주문일자, O.주문수량
+FROM T_cust23 C, T_order23 O
+WHERE C.고객성향코드 = '920'
+ AND  O.고객번호     = C.고객번호
+ AND  O.주문일자 BETWEEN '20170101' AND '20170131'
+ AND  O.상품코드     = 'P103';
+ORDER BY desc t_cust23;
+
+
+PLAN_TABLE_OUTPUT
+-----------------------------------------------------------------------------------------------------------------
+| Id  | Operation			      | Name	      | Starts | E-Rows | A-Rows |   A-Time   | Buffers |
+-----------------------------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT		      | 	      |      1 |	|     21 |00:00:00.01 |     328 |
+|   1 |  NESTED LOOPS			      | 	      |      1 |    109 |     21 |00:00:00.01 |     328 |
+|   2 |   NESTED LOOPS			      | 	      |      1 |    109 |     21 |00:00:00.01 |     307 |
+|   3 |    TABLE ACCESS BY INDEX ROWID BATCHED| T_CUST23      |      1 |    106 |    101 |00:00:00.01 |      99 |
+|*  4 |     INDEX RANGE SCAN		      | IDX_T_CUST23  |      1 |    106 |    101 |00:00:00.01 |       4 |
+|*  5 |    INDEX RANGE SCAN		      | IDX_T_ORDER23 |    101 |      1 |     21 |00:00:00.01 |     208 |
+|   6 |   TABLE ACCESS BY INDEX ROWID	      | T_ORDER23     |     21 |      1 |     21 |00:00:00.01 |      21 |
+-----------------------------------------------------------------------------------------------------------------
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   4 - access("C"."고객성향코드"='920')
+   5 - access("O"."고객번호"="C"."고객번호" AND "O"."상품코드"='P103' AND "O"."주문일자">='20170101'
+	      AND "O"."주문일자"<='20170131')
+
+
+SELECT /*+leading(C O) USE_HASH(C O) index(C IDX_T_cust23) index(O IDX_T_order23) */
+       C.고객번호, C.고객명, C.C1, 
+       O.ordernum, O.itemcode, O.orderdate, O.orderamount
+FROM T_cust23 C, T_order23 O
+WHERE C.고객성향코드 = '920'
+ AND  O.custno     = C.고객번호
+ AND  O.orderdate LIKE '201701%'
+ AND  O.itemcode     = 'P103'; 
+
+ SQL> DROP INDEX IDX_T_order23;
+ CREATE INDEX IDX_T_order23 ON T_order23(itemcode, orderdate, custno);
+
+ SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY_CURSOR(NULL,NULL,'ALLSTATS LAST'));
